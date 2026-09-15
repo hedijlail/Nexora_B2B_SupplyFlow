@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import CurrentUser, get_current_user, require_roles
+from app.core.audit import write_audit_log
 from app.core.database import get_db
 from app.inventory.service import record_stock_movement
 from app.orders.schemas import FulfilOrderRequest, OrderCreate, OrderResponse
@@ -14,6 +15,7 @@ from app.orders.schemas import FulfilOrderRequest, OrderCreate, OrderResponse
 router = APIRouter(prefix="/orders", tags=["orders"])
 SALES_ROLES = ("owner", "admin", "sales")
 FULFIL_ROLES = ("owner", "admin", "warehouse")
+CANCEL_ROLES = ("owner", "admin", "sales", "warehouse")
 
 
 def next_order_number() -> str:
@@ -68,6 +70,7 @@ def create_order(payload: OrderCreate, current_user: CurrentUser = Depends(requi
             UPDATE orders SET subtotal=:subtotal,discount_total=:discount_total,tax_total=:tax_total,grand_total=:grand_total WHERE id=:id
             RETURNING id::text,order_number,status::text,subtotal::float,discount_total::float,tax_total::float,grand_total::float
         """), {"id": order["id"], "subtotal": subtotal, "discount_total": discount_total, "tax_total": tax_total, "grand_total": subtotal-discount_total+tax_total}).mappings().one()
+        write_audit_log(db, company_id=company_id, actor_user_id=current_user.id, action="order.created", entity_type="order", entity_id=UUID(order["id"]), new_values=dict(order))
         db.commit()
         return order
     except (ValueError, IntegrityError) as exc:
@@ -87,6 +90,7 @@ def confirm_order(order_id: UUID, current_user: CurrentUser = Depends(require_ro
     if order is None:
         db.rollback()
         raise HTTPException(status_code=409, detail="Only draft orders can be confirmed")
+    write_audit_log(db, company_id=current_user.company_id, actor_user_id=current_user.id, action="order.confirmed", entity_type="order", entity_id=order_id, old_values={"status": "draft"}, new_values=dict(order))
     db.commit()
     return order
 
@@ -114,11 +118,59 @@ def fulfil_order(order_id: UUID, payload: FulfilOrderRequest, current_user: Curr
             UPDATE orders SET status='fulfilled' WHERE id=:id AND company_id=:company_id
             RETURNING id::text,order_number,status::text,subtotal::float,discount_total::float,tax_total::float,grand_total::float
         """), {"id": order_id, "company_id": current_user.company_id}).mappings().one()
+        write_audit_log(db, company_id=current_user.company_id, actor_user_id=current_user.id, action="order.fulfilled", entity_type="order", entity_id=order_id, old_values={"status": order["status"]}, new_values=dict(fulfilled))
         db.commit()
         return fulfilled
     except (ValueError, IntegrityError) as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Fulfilment failed: check warehouse and available stock") from exc
+    except HTTPException:
+        db.rollback()
+        raise
+
+
+@router.post("/{order_id}/cancel", response_model=OrderResponse)
+def cancel_order(order_id: UUID, current_user: CurrentUser = Depends(require_roles(*CANCEL_ROLES)), db: Session = Depends(get_db)):
+    """Cancel an order; a fulfilled order returns its exact shipped quantities."""
+    try:
+        order = db.execute(text("""
+            SELECT id,status::text FROM orders
+            WHERE id=:id AND company_id=:company_id FOR UPDATE
+        """), {"id": order_id, "company_id": current_user.company_id}).mappings().one_or_none()
+        if order is None:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if order["status"] == "cancelled":
+            raise HTTPException(status_code=409, detail="Order is already cancelled")
+        if order["status"] not in {"draft", "confirmed", "processing", "fulfilled"}:
+            raise HTTPException(status_code=409, detail="Order cannot be cancelled in its current status")
+        active_invoice = db.execute(text("""
+            SELECT 1 FROM invoices WHERE company_id=:company_id AND order_id=:order_id AND status <> 'void'
+        """), {"company_id": current_user.company_id, "order_id": order_id}).scalar()
+        if active_invoice:
+            raise HTTPException(status_code=409, detail="Void the invoice before cancelling this order")
+        if order["status"] == "fulfilled":
+            sales = db.execute(text("""
+                SELECT warehouse_id, product_id, quantity_delta
+                FROM stock_movements
+                WHERE company_id=:company_id AND reference_type='order' AND reference_id=:order_id AND movement_type='sale'
+                ORDER BY created_at
+            """), {"company_id": current_user.company_id, "order_id": order_id}).mappings()
+            for sale in sales:
+                record_stock_movement(
+                    db, company_id=current_user.company_id, warehouse_id=sale["warehouse_id"], product_id=sale["product_id"],
+                    quantity_delta=-float(sale["quantity_delta"]), movement_type="return", performed_by=current_user.id,
+                    reference_type="order_cancellation", reference_id=order_id,
+                )
+        cancelled = db.execute(text("""
+            UPDATE orders SET status='cancelled' WHERE id=:id AND company_id=:company_id
+            RETURNING id::text,order_number,status::text,subtotal::float,discount_total::float,tax_total::float,grand_total::float
+        """), {"id": order_id, "company_id": current_user.company_id}).mappings().one()
+        write_audit_log(db, company_id=current_user.company_id, actor_user_id=current_user.id, action="order.cancelled", entity_type="order", entity_id=order_id, old_values={"status": order["status"]}, new_values=dict(cancelled))
+        db.commit()
+        return cancelled
+    except (ValueError, IntegrityError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Order cancellation failed") from exc
     except HTTPException:
         db.rollback()
         raise

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B2B Supplier</title>
+  <link rel="stylesheet" href="/app/styles.css">
+</head>
+<body>
+  <main id="login-view" class="auth-shell">
+    <section class="login-card">
+      <p class="eyebrow">B2B SUPPLIER</p>
+      <h1>Welcome back</h1>
+      <p class="muted">Sign in to manage your business.</p>
+      <form id="login-form">
+        <label>Company slug<input id="company-slug" required placeholder="my-company"></label>
+        <label>Email<input id="email" type="email" required placeholder="admin@company.com"></label>
+        <label>Password<input id="password" type="password" required placeholder="••••••••••••"></label>
+        <p id="login-error" class="error" hidden></p>
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+      <p class="hint">First use? Create the company owner from <a href="/docs">API Docs</a>.</p>
+    </section>
+  </main>
+
+  <main id="app-view" class="app-shell" hidden>
+    <aside class="sidebar">
+      <div class="brand">B2B<span>Supplier</span></div>
+      <nav>
+        <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        <button class="nav-item" data-view="customers">Customers</button>
+        <button class="nav-item" data-view="products">Products</button>
+        <button class="nav-item" data-view="warehouses">Warehouses</button>
+        <button class="nav-item" data-view="stocks">Stock</button>
+        <button class="nav-item" data-view="orders">Orders</button>
+        <button class="nav-item" data-view="invoices">Invoices</button>
+      </nav>
+      <button id="logout" class="logout">Sign out</button>
+    </aside>
+    <section class="content">
+      <header><div><p class="eyebrow" id="section-kicker">OVERVIEW</p><h1 id="section-title">Dashboard</h1></div><button id="refresh" class="secondary">Refresh</button></header>
+      <p id="app-error" class="error" hidden></p>
+      <section id="dashboard" class="view active"></section>
+      <section id="customers" class="view"></section>
+      <section id="products" class="view"></section>
+      <section id="warehouses" class="view"></section>
+      <section id="stocks" class="view"></section>
+      <section id="orders" class="view"></section>
+      <section id="invoices" class="view"></section>
+    </section>
+  </main>
+  <script src="/app/app.js"></script>
+</body>
+</html>

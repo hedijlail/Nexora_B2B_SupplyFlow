@@ -12,5 +12,5 @@ def write_audit_log(session: Session, *, company_id: UUID, action: str, entity_t
         INSERT INTO audit_logs (company_id,actor_user_id,action,entity_type,entity_id,old_values,new_values)
         VALUES (:company_id,:actor_user_id,:action,:entity_type,:entity_id,CAST(:old_values AS jsonb),CAST(:new_values AS jsonb))
     """), {"company_id": company_id, "actor_user_id": actor_user_id, "action": action, "entity_type": entity_type,
-           "entity_id": entity_id, "old_values": json.dumps(old_values) if old_values is not None else None,
-           "new_values": json.dumps(new_values) if new_values is not None else None})
+           "entity_id": entity_id, "old_values": json.dumps(old_values, default=str) if old_values is not None else None,
+           "new_values": json.dumps(new_values, default=str) if new_values is not None else None})
