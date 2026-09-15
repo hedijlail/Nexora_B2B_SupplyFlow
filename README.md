@@ -1,50 +1,439 @@
-# B2B Supplier Platform
+# Nexora B2B SupplyFlow
 
-Modular FastAPI backend for cloud multi-tenancy or a single-company on-premise installation. PostgreSQL is the system of record.
+**B2B Supply Chain & Business Operations Management Platform**
 
-## Start locally
+Nexora B2B SupplyFlow is a modular backend platform designed to centralize and automate core B2B business operations, including customer management, orders, invoices, payments, pricing, analytics, authentication, and audit tracking.
 
-1. Copy `.env.example` to `.env` and replace `JWT_SECRET_KEY`.
-2. Run `docker compose up --build`.
-3. Open `/docs` or call `/health`.
+The project is built with a focus on **clean architecture, modularity, security, scalability, and maintainability**, making it suitable for small and medium-sized businesses that need a centralized system for managing their commercial workflow.
 
-The API container applies `alembic upgrade head` before starting. For a host-side migration, set `DATABASE_URL` to your database and run `alembic upgrade head`.
+---
 
-## Data guarantees
+##  Key Features
 
-- Every tenant-owned table has `company_id`; composite foreign keys prevent cross-company references.
-- Application services derive `company_id` from the JWT claims and never accept it as a client-controlled filter.
-- Inventory updates use `record_stock_movement()` inside one database transaction. The stock row is updated and ledgered together; database constraints prohibit negative available or reserved stock.
-- Records that users deactivate retain history; customers, categories, products, and warehouses also have `deleted_at` for soft deletion.
+###  Authentication & Authorization
 
-## Project layout
+* Secure user authentication
+* JWT-based access tokens
+* Company-based authentication
+* Role-based access control
+* User and company context
+* Password validation and security rules
 
-Each domain package (`auth`, `orders`, `inventory`, etc.) will own its router, schemas, service layer, and repository queries. Shared configuration, database setup, and tenant-scoping stay in `app/core`. This deliberately remains a modular monolith.
+###  Customer Management
 
-## First-use flow
+* Create and manage customers
+* Customer contact information
+* Tax and business information
+* Credit limit management
+* Payment terms
+* Customer activation/deactivation
+* Customer search and listing
 
-1. `POST /auth/bootstrap` creates the first company and its owner, returning a bearer token.
-2. Use that token in `/docs` through **Authorize**.
-3. Create users, customers, categories, products, warehouses, then record opening stock.
-4. Create and confirm an order, fulfil it from a warehouse, create its invoice, then record payments.
+###  Order Management
 
-`GET /audit-logs` is restricted to owners and admins. `GET/PUT /settings` manages tenant-specific JSON settings; writing a setting produces an audit event.
+* Create and manage B2B orders
+* Order status management
+* Customer-order relationships
+* Order lifecycle tracking
+* Business validation
 
-## Sales pricing and dashboard
+###  Invoice Management
 
-- `GET/POST/PATCH /customer-pricing` manages customer-specific product prices, minimum quantities, and validity dates. Order creation automatically selects the best active price tier for its customer and quantity.
-- `GET /dashboard/summary` provides tenant-scoped sales, receivables, inventory valuation, and overdue-invoice totals.
+* Invoice creation and management
+* Customer and order association
+* Invoice status tracking
+* Payment status integration
 
-## Cancellation rules
+###  Payment Management
 
-- `POST /invoices/{invoice_id}/void` voids an invoice only when it has no completed payment.
-- `POST /orders/{order_id}/cancel` cancels a draft or confirmed order directly. For a fulfilled order, it first restores the quantities from its recorded sales movements. An order with an active invoice must have that invoice voided first.
-- `POST /payments/{payment_id}/refund` refunds a completed payment in full and recalculates the invoice status. A refunded payment then no longer blocks invoice voiding.
+* Payment recording
+* Payment tracking
+* Invoice-payment relationships
+* Payment status management
 
-## Tests
+###  Pricing
 
-Install the development dependencies and run `pytest`. The included smoke tests cover health and JWT claims. The next test layer should use an isolated PostgreSQL database to verify migrations, tenant boundaries, stock concurrency, and the order-to-payment workflow.
+* Centralized pricing management
+* Product/service pricing rules
+* Customer-oriented pricing logic
+* Extensible pricing architecture
 
-## On-premise administrator recovery
+###  Analytics & Dashboard
 
-The API intentionally has no public password-reset endpoint. An on-premise operator can run `scripts/reset_admin_password.py` inside the API container to list accounts and set a new password through hidden interactive input.
+* Business analytics endpoints
+* Dashboard data aggregation
+* KPI-oriented backend services
+* Sales and business performance insights
+
+###  Audit & Activity Tracking
+
+* Audit logging
+* Business activity tracking
+* User action monitoring
+* Traceability of important operations
+
+---
+
+##  Architecture
+
+Nexora follows a modular backend architecture where each business domain is isolated into its own module.
+
+```text
+Nexora_B2B_SupplyFlow/
+│
+├── app/
+│   ├── auth/
+│   │   ├── router.py
+│   │   ├── schemas.py
+│   │   └── ...
+│   │
+│   ├── customers/
+│   │   ├── router.py
+│   │   ├── schemas.py
+│   │   └── ...
+│   │
+│   ├── orders/
+│   │   ├── router.py
+│   │   ├── schemas.py
+│   │   └── ...
+│   │
+│   ├── invoices/
+│   │   ├── router.py
+│   │   ├── schemas.py
+│   │   └── ...
+│   │
+│   ├── payments/
+│   │   ├── router.py
+│   │   ├── schemas.py
+│   │   └── ...
+│   │
+│   ├── pricing/
+│   │   ├── router.py
+│   │   ├── schemas.py
+│   │   └── ...
+│   │
+│   ├── analytics/
+│   │   ├── dashboard_router.py
+│   │   ├── dashboard_schemas.py
+│   │   └── ...
+│   │
+│   ├── web/
+│   │   └── ...
+│   │
+│   ├── core/
+│   │   ├── audit.py
+│   │   └── ...
+│   │
+│   └── main.py
+│
+├── scripts/
+│
+├── requirements.txt
+├── README.md
+└── ...
+```
+
+The modular structure makes it easier to:
+
+* Add new business domains
+* Maintain existing features
+* Test individual modules
+* Scale the application
+* Apply domain-specific business logic
+* Collaborate efficiently in a team
+
+---
+
+##  Technology Stack
+
+| Technology       | Purpose                     |
+| ---------------- | --------------------------- |
+| **Python**       | Backend development         |
+| **FastAPI**      | REST API framework          |
+| **Pydantic**     | Data validation and schemas |
+| **JWT**          | Authentication              |
+| **SQL Database** | Persistent business data    |
+| **Docker**       | Containerization            |
+| **Git & GitHub** | Version control             |
+| **REST API**     | Client-server communication |
+
+---
+
+##  Business Workflow
+
+Nexora is designed around a typical B2B commercial workflow:
+
+```text
+Company
+   │
+   ├── Users
+   │
+   └── Customers
+          │
+          ▼
+        Orders
+          │
+          ▼
+       Invoices
+          │
+          ▼
+       Payments
+          │
+          ▼
+       Analytics
+```
+
+This structure allows the platform to connect commercial operations from customer acquisition through payment and business analysis.
+
+---
+
+##  Authentication Flow
+
+The authentication system follows a token-based architecture:
+
+```text
+Client
+  │
+  ▼
+Login
+  │
+  ▼
+Authentication API
+  │
+  ▼
+JWT Access Token
+  │
+  ▼
+Protected API Endpoints
+  │
+  ├── Customers
+  ├── Orders
+  ├── Invoices
+  ├── Payments
+  ├── Pricing
+  └── Analytics
+```
+
+Protected endpoints require a valid access token.
+
+---
+
+##  Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/hedijlail/Nexora_B2B_SupplyFlow.git
+cd Nexora_B2B_SupplyFlow
+```
+
+### 2. Create a virtual environment
+
+#### Windows
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+#### Linux / macOS
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+##  Environment Variables
+
+Create a `.env` file in the project root.
+
+Example:
+
+```env
+DATABASE_URL=your_database_url
+
+SECRET_KEY=your_secret_key
+
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+ENVIRONMENT=development
+```
+
+> Never commit sensitive credentials, API keys, database passwords, or secret keys to GitHub.
+
+---
+
+##  Running the Application
+
+Start the FastAPI development server:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+The API will be available at:
+
+```text
+http://localhost:8000
+```
+
+### API Documentation
+
+FastAPI automatically provides interactive API documentation.
+
+**Swagger UI**
+
+```text
+http://localhost:8000/docs
+```
+
+**ReDoc**
+
+```text
+http://localhost:8000/redoc
+```
+
+---
+
+##  Docker
+
+The project is designed to support containerized development and deployment.
+
+Build the application:
+
+```bash
+docker build -t nexora-supplyflow .
+```
+
+Run the container:
+
+```bash
+docker run -p 8000:8000 nexora-supplyflow
+```
+
+For multi-container environments, Docker Compose can be used to orchestrate the API, database, and supporting services.
+
+---
+
+##  API Testing
+
+The API can be tested using:
+
+* Swagger UI
+* Postman
+* cURL
+* Automated tests
+
+Example:
+
+```bash
+curl http://localhost:8000/
+```
+
+Protected endpoints should be tested using a valid JWT access token.
+
+---
+
+##  Development Roadmap
+
+The project is actively evolving toward a complete B2B business management platform.
+
+### Completed / In Progress
+
+* [x] Modular FastAPI backend
+* [x] Authentication foundation
+* [x] JWT authentication
+* [x] Customer management
+* [x] Orders module
+* [x] Invoices module
+* [x] Payments module
+* [x] Pricing module
+* [x] Audit logging
+* [x] Analytics foundation
+* [ ] Automated testing
+* [ ] Advanced dashboard
+* [ ] Inventory management
+* [ ] Product management
+* [ ] Notifications
+* [ ] CI/CD pipeline
+* [ ] Production deployment
+* [ ] Advanced reporting
+
+---
+
+##  Future Improvements
+
+Planned improvements include:
+
+* Advanced inventory and warehouse management
+* Product catalog
+* Supplier management
+* Purchase orders
+* Advanced financial reporting
+* Real-time notifications
+* Role and permission management
+* Frontend dashboard
+* Automated testing and coverage
+* CI/CD automation
+* Production monitoring
+* Cloud deployment
+* API versioning
+* Performance optimization
+
+---
+
+##  Security
+
+Security is an important part of the project architecture.
+
+The application is designed to support:
+
+* JWT-based authentication
+* Password validation
+* Role-based authorization
+* Protected API endpoints
+* Input validation using Pydantic
+* Audit logging
+* Environment-based secret management
+
+Sensitive configuration should always be stored using environment variables or a secure secret-management solution.
+
+---
+
+##  Project Goals
+
+Nexora aims to provide a scalable foundation for B2B companies that need to manage:
+
+**Customers → Orders → Invoices → Payments → Analytics**
+
+The long-term goal is to evolve the platform into a complete **B2B supply chain and business operations management solution**.
+
+---
+
+##  Author
+
+**Hedi Jlail**
+
+Computer Science Student | AI & Software Development
+
+GitHub: [@hedijlail](https://github.com/hedijlail)
+
+---
+
+##  License
+
+This project is currently under development.
+
+License information will be added when the project reaches its first stable release.
+
+---
+
+⭐ If you find this project interesting, consider giving the repository a star.
